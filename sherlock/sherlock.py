@@ -16,8 +16,10 @@ import re
 import sys
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from time import monotonic
+from regex import D
 
 import requests
+from rsa import verify
 
 from requests_futures.sessions import FuturesSession
 from torrequest import TorRequest
@@ -162,7 +164,7 @@ def MultipleUsernames(username):
 
 def sherlock(username, site_data, query_notify,
              tor=False, unique_tor=False,
-             proxy=None, timeout=60):
+             proxy=None, timeout=60, verify_ssl=True):
     """Run Sherlock Analysis.
 
     Checks for existence of username on various social media sites.
@@ -179,6 +181,7 @@ def sherlock(username, site_data, query_notify,
     proxy                  -- String indicating the proxy URL
     timeout                -- Time in seconds to wait before timing out request.
                               Default is 60 seconds.
+    verify_ssl             -- Boolean indicating whether to use SSL verification for the request.
 
     Return Value:
     Dictionary containing results from report. Key of dictionary is the name
@@ -313,13 +316,15 @@ def sherlock(username, site_data, query_notify,
                                  proxies=proxies,
                                  allow_redirects=allow_redirects,
                                  timeout=timeout,
-                                 json=request_payload
+                                 json=request_payload,
+                                 verify=verify_ssl
                                  )
             else:
                 future = request(url=url_probe, headers=headers,
                                  allow_redirects=allow_redirects,
                                  timeout=timeout,
-                                 json=request_payload
+                                 json=request_payload,
+                                 verify=verify_ssl
                                  )
 
             # Store future in data for access later
@@ -564,6 +569,10 @@ def main():
     parser.add_argument("--nsfw",
                         action="store_true", default=False,
                         help="Include checking of NSFW sites from default list.")
+    
+    parser.add_argument("--no-ssl", 
+                        action="store_true", default=False, 
+                        help="Disable SSL certificate verification.", dest="no_ssl")
 
     args = parser.parse_args()
 
@@ -631,6 +640,11 @@ def main():
     if not args.nsfw:
         sites.remove_nsfw_sites()
 
+    if args.no_ssl:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        print("Warning: SSL Verification is disabled.")
+
     # Create original dictionary from SitesInformation() object.
     # Eventually, the rest of the code will be updated to use the new object
     # directly, but this will glue the two pieces together.
@@ -682,7 +696,8 @@ def main():
                            tor=args.tor,
                            unique_tor=args.unique_tor,
                            proxy=args.proxy,
-                           timeout=args.timeout)
+                           timeout=args.timeout,
+                           verify_ssl=(not args.no_ssl))
 
         if args.output:
             result_file = args.output
